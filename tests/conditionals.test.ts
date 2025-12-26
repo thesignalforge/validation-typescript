@@ -223,6 +223,175 @@ describe('Conditional validation', () => {
                 admin_code: '',
             }).valid).toBe(true);
         });
+
+        it('validates with multiple conditions in AND (3+)', () => {
+            const rules: Rules = {
+                type: ['required'],
+                country: ['required'],
+                revenue: ['required', 'numeric'],
+                tax_id: [
+                    ['when', ['and',
+                        ['type', '=', 'business'],
+                        ['country', 'in', ['HR', 'SI', 'AT']],
+                        ['revenue', '>=', 100000]
+                    ], [
+                        'required',
+                        'string',
+                    ]],
+                ],
+            };
+
+            const validator = new Validator(rules);
+
+            // All 3 conditions met = required
+            expect(validator.validate({
+                type: 'business',
+                country: 'HR',
+                revenue: 150000,
+                tax_id: '',
+            }).valid).toBe(false);
+
+            // Only 2 conditions met = not required
+            expect(validator.validate({
+                type: 'business',
+                country: 'HR',
+                revenue: 50000,
+                tax_id: '',
+            }).valid).toBe(true);
+
+            // All 3 conditions met with value = valid
+            expect(validator.validate({
+                type: 'business',
+                country: 'HR',
+                revenue: 150000,
+                tax_id: 'HR12345678901',
+            }).valid).toBe(true);
+        });
+
+        it('validates with multiple conditions in OR (3+)', () => {
+            const rules: Rules = {
+                role: ['required'],
+                special_access: [
+                    ['when', ['or',
+                        ['role', '=', 'admin'],
+                        ['role', '=', 'superadmin'],
+                        ['role', '=', 'moderator'],
+                        ['role', '=', 'support']
+                    ], [
+                        'required',
+                    ]],
+                ],
+            };
+
+            const validator = new Validator(rules);
+
+            // Any privileged role requires special_access
+            expect(validator.validate({ role: 'admin', special_access: '' }).valid).toBe(false);
+            expect(validator.validate({ role: 'superadmin', special_access: '' }).valid).toBe(false);
+            expect(validator.validate({ role: 'moderator', special_access: '' }).valid).toBe(false);
+            expect(validator.validate({ role: 'support', special_access: '' }).valid).toBe(false);
+
+            // Regular user doesn't require it
+            expect(validator.validate({ role: 'user', special_access: '' }).valid).toBe(true);
+        });
+
+        it('validates with nested compound conditions', () => {
+            const rules: Rules = {
+                type: ['required'],
+                country: ['required'],
+                is_verified: ['required', 'boolean'],
+                premium_features: [
+                    // (type=business AND country in EU) OR (is_verified=true)
+                    ['when', ['or',
+                        ['and', ['type', '=', 'business'], ['country', 'in', ['HR', 'SI', 'AT', 'DE']]],
+                        ['is_verified', '=', true]
+                    ], [
+                        'required',
+                    ]],
+                ],
+            };
+
+            const validator = new Validator(rules);
+
+            // Business in EU = required
+            expect(validator.validate({
+                type: 'business',
+                country: 'HR',
+                is_verified: false,
+                premium_features: '',
+            }).valid).toBe(false);
+
+            // Verified user (any type) = required
+            expect(validator.validate({
+                type: 'personal',
+                country: 'US',
+                is_verified: true,
+                premium_features: '',
+            }).valid).toBe(false);
+
+            // Personal, non-EU, not verified = not required
+            expect(validator.validate({
+                type: 'personal',
+                country: 'US',
+                is_verified: false,
+                premium_features: '',
+            }).valid).toBe(true);
+        });
+
+        it('validates with multiple independent when rules on same field', () => {
+            const rules: Rules = {
+                account_type: ['required'],
+                country: ['required'],
+                document: [
+                    // First condition: business accounts need document
+                    ['when', ['account_type', '=', 'business'], [
+                        'required',
+                    ]],
+                    // Second condition: if provided, must be string with min length
+                    ['when', ['@filled'], [
+                        'string',
+                        ['min', 5],
+                    ]],
+                ],
+            };
+
+            const validator = new Validator(rules);
+
+            // Business without document = fails first when
+            expect(validator.validate({
+                account_type: 'business',
+                country: 'HR',
+                document: '',
+            }).valid).toBe(false);
+
+            // Business with short document = fails second when
+            expect(validator.validate({
+                account_type: 'business',
+                country: 'HR',
+                document: 'abc',
+            }).valid).toBe(false);
+
+            // Business with valid document = passes both
+            expect(validator.validate({
+                account_type: 'business',
+                country: 'HR',
+                document: 'valid-document-id',
+            }).valid).toBe(true);
+
+            // Personal without document = passes (not required)
+            expect(validator.validate({
+                account_type: 'personal',
+                country: 'HR',
+                document: '',
+            }).valid).toBe(true);
+
+            // Personal with short document = fails second when
+            expect(validator.validate({
+                account_type: 'personal',
+                country: 'HR',
+                document: 'abc',
+            }).valid).toBe(false);
+        });
     });
 
     describe('comparison operators', () => {

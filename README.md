@@ -151,24 +151,82 @@ const rules: Rules = {
 
 ### Compound Conditions
 
+Combine multiple checks with `and`/`or`. You can include **any number of conditions**:
+
 ```typescript
 const rules: Rules = {
-    // AND condition
-    vat_number: [
-        ['when', ['and', ['type', '=', 'business'], ['country', 'in', ['HR', 'SI', 'AT']]], [
+    // AND with 3 conditions - all must be true
+    tax_id: [
+        ['when', ['and',
+            ['type', '=', 'business'],
+            ['country', 'in', ['HR', 'SI', 'AT']],
+            ['revenue', '>=', 100000]
+        ], [
             'required',
-            'vat_eu',
+            'string',
         ]],
     ],
 
-    // OR condition
-    admin_code: [
-        ['when', ['or', ['role', '=', 'admin'], ['role', '=', 'superadmin']], [
+    // OR with 4 conditions - any one must be true
+    special_access: [
+        ['when', ['or',
+            ['role', '=', 'admin'],
+            ['role', '=', 'superadmin'],
+            ['role', '=', 'moderator'],
+            ['role', '=', 'support']
+        ], [
             'required',
         ]],
     ],
 };
 ```
+
+### Nested Compound Conditions
+
+Nest `and`/`or` for complex logic:
+
+```typescript
+const rules: Rules = {
+    premium_features: [
+        // (type=business AND country in EU) OR (is_verified=true)
+        ['when', ['or',
+            ['and', ['type', '=', 'business'], ['country', 'in', ['HR', 'SI', 'AT', 'DE']]],
+            ['is_verified', '=', true]
+        ], [
+            'required',
+        ]],
+    ],
+};
+```
+
+### Multiple Independent Conditions
+
+A single field can have **multiple `when` rules** that are evaluated independently:
+
+```typescript
+const rules: Rules = {
+    document: [
+        // First: business accounts require a document
+        ['when', ['account_type', '=', 'business'], [
+            'required',
+        ]],
+
+        // Second: if any value is provided, it must be valid
+        ['when', ['@filled'], [
+            'string',
+            ['min', 5],
+            ['max', 100],
+        ]],
+
+        // Third: specific format for certain countries
+        ['when', ['country', 'in', ['DE', 'AT']], [
+            ['regex', /^[A-Z]{2}\d{8}$/],
+        ]],
+    ],
+};
+```
+
+Each `when` block is evaluated separately. This allows layered validation logic where different conditions trigger different rule sets on the same field.
 
 ### Condition Operators
 
