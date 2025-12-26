@@ -1,0 +1,49 @@
+{
+    "rule": "required",
+    "cases": [
+        {
+            "input": "value",
+            "valid": true,
+            "note": "non-empty string passes"
+        },
+        {
+            "input": 0,
+            "valid": true,
+            "note": "zero passes"
+        },
+        {
+            "input": false,
+            "valid": true,
+            "note": "false passes"
+        },
+        {
+            "input": [1, 2, 3],
+            "valid": true,
+            "note": "non-empty array passes"
+        },
+        {
+            "input": "",
+            "valid": false,
+            "error": { "key": "validation.required" },
+            "note": "empty string fails"
+        },
+        {
+            "input": "   ",
+            "valid": false,
+            "error": { "key": "validation.required" },
+            "note": "whitespace-only string fails"
+        },
+        {
+            "input": null,
+            "valid": false,
+            "error": { "key": "validation.required" },
+            "note": "null fails"
+        },
+        {
+            "input": [],
+            "valid": false,
+            "error": { "key": "validation.required" },
+            "note": "empty array fails"
+        }
+    ]
+}

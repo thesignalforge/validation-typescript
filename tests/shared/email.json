@@ -1,0 +1,49 @@
+{
+    "rule": "email",
+    "cases": [
+        {
+            "input": "user@example.com",
+            "valid": true,
+            "note": "standard email"
+        },
+        {
+            "input": "user.name@example.com",
+            "valid": true,
+            "note": "email with dot in local part"
+        },
+        {
+            "input": "user+tag@example.com",
+            "valid": true,
+            "note": "email with plus tag"
+        },
+        {
+            "input": "user@subdomain.example.com",
+            "valid": true,
+            "note": "email with subdomain"
+        },
+        {
+            "input": "plaintext",
+            "valid": false,
+            "error": { "key": "validation.email" },
+            "note": "missing @ symbol"
+        },
+        {
+            "input": "@example.com",
+            "valid": false,
+            "error": { "key": "validation.email" },
+            "note": "missing local part"
+        },
+        {
+            "input": "user@",
+            "valid": false,
+            "error": { "key": "validation.email" },
+            "note": "missing domain"
+        },
+        {
+            "input": "user@.com",
+            "valid": false,
+            "error": { "key": "validation.email" },
+            "note": "domain starts with dot"
+        }
+    ]
+}
