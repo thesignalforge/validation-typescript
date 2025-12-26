@@ -40,6 +40,7 @@ if (result.valid) {
 - **Type-safe** — Full TypeScript inference for rules and results
 - **Conditional validation** — Apply rules based on other field values
 - **Wildcard support** — Validate array items with `items.*` syntax
+- **Database-friendly** — Rules are plain JSON, store and load from any database
 - **i18n ready** — Returns translation keys, not hardcoded messages
 - **Zero dependencies** — No runtime dependencies
 
@@ -393,6 +394,197 @@ if (result.valid) {
 ```typescript
 const result = Validator.make(data, rules);
 ```
+
+## Dynamic Rules & Database Storage
+
+### Why Dynamic Rules?
+
+In many applications, validation rules aren't static—they need to change based on business requirements, user configurations, or dynamic content types. Consider these scenarios:
+
+- **Custom form builders** where end-users define their own fields and validation requirements
+- **Multi-tenant applications** where each tenant has different validation rules for the same entity
+- **CMS systems** where content types are defined at runtime, not compile time
+- **Configurable workflows** where validation changes based on document state or user role
+- **A/B testing** validation rules without deploying new code
+
+Hardcoding validation rules means every change requires a code deployment. By storing rules in a database, you can:
+
+- Let administrators modify validation without developer intervention
+- Apply different rules per customer, locale, or environment
+- Version and audit rule changes over time
+- Roll back problematic rules instantly
+
+### Serializing Rules for Storage
+
+The rule format is pure JSON-compatible data structures (arrays, strings, numbers), making it trivial to serialize for database storage:
+
+```typescript
+import { type Rules } from '@signalforge/validation';
+
+// Define rules programmatically or via admin UI
+const formRules: Rules = {
+    email: ['required', 'email'],
+    age: ['nullable', 'integer', ['between', 18, 120]],
+    role: ['required', ['in', ['admin', 'user', 'guest']]],
+};
+
+// Serialize for database storage
+const rulesJson = JSON.stringify(formRules);
+// Store rulesJson in your database (TEXT/JSON column)
+
+// Later, retrieve and parse
+const storedRules: Rules = JSON.parse(rulesJson);
+const validator = new Validator(storedRules);
+```
+
+### Database Schema Example
+
+```sql
+CREATE TABLE validation_rules (
+    id SERIAL PRIMARY KEY,
+    entity_type VARCHAR(100) NOT NULL,  -- e.g., 'contact_form', 'user_profile'
+    tenant_id INTEGER,                   -- for multi-tenant apps
+    rules JSONB NOT NULL,                -- the serialized rules
+    version INTEGER DEFAULT 1,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Example: different rules per tenant
+INSERT INTO validation_rules (entity_type, tenant_id, rules) VALUES
+('contact_form', 1, '{"email": ["required", "email"], "message": ["required", ["min", 10]]}'),
+('contact_form', 2, '{"email": ["required", "email"], "phone": ["required", ["phone", "DE"]]}');
+```
+
+### Loading Rules at Runtime
+
+```typescript
+// Backend: fetch rules from database
+async function getValidationRules(entityType: string, tenantId: number): Promise<Rules> {
+    const row = await db.query(
+        'SELECT rules FROM validation_rules WHERE entity_type = $1 AND tenant_id = $2',
+        [entityType, tenantId]
+    );
+    return row.rules; // Already parsed if using JSONB, or JSON.parse(row.rules)
+}
+
+// Frontend: receive rules from API
+async function validateForm(formData: Record<string, unknown>) {
+    const response = await fetch('/api/validation-rules/contact_form');
+    const rules: Rules = await response.json();
+
+    const validator = new Validator(rules);
+    return validator.validate(formData);
+}
+```
+
+### Handling Regex Patterns
+
+The only caveat is regex patterns—they can't be directly JSON serialized. Store them as strings and reconstruct:
+
+```typescript
+// When saving to database, convert RegExp to string representation
+function serializeRules(rules: Rules): string {
+    return JSON.stringify(rules, (key, value) => {
+        if (value instanceof RegExp) {
+            return { __regex: value.source, __flags: value.flags };
+        }
+        return value;
+    });
+}
+
+// When loading from database, restore RegExp objects
+function deserializeRules(json: string): Rules {
+    return JSON.parse(json, (key, value) => {
+        if (value && typeof value === 'object' && '__regex' in value) {
+            return new RegExp(value.__regex, value.__flags);
+        }
+        return value;
+    });
+}
+
+// Usage
+const rules: Rules = {
+    slug: ['required', ['regex', /^[a-z0-9-]+$/]],
+};
+
+const serialized = serializeRules(rules);
+// {"slug":["required",["regex",{"__regex":"^[a-z0-9-]+$","__flags":""}]]}
+
+const restored = deserializeRules(serialized);
+// Works exactly like the original
+```
+
+### Building an Admin UI
+
+Since rules are plain data structures, you can build admin interfaces that let non-developers configure validation:
+
+```typescript
+// Example: building rules from a form builder UI
+interface FieldConfig {
+    name: string;
+    required: boolean;
+    type: 'text' | 'email' | 'number' | 'select';
+    minLength?: number;
+    maxLength?: number;
+    options?: string[];  // for select fields
+}
+
+function buildRulesFromConfig(fields: FieldConfig[]): Rules {
+    const rules: Rules = {};
+
+    for (const field of fields) {
+        const fieldRules: Rule[] = [];
+
+        if (field.required) {
+            fieldRules.push('required');
+        } else {
+            fieldRules.push('nullable');
+        }
+
+        switch (field.type) {
+            case 'email':
+                fieldRules.push('email');
+                break;
+            case 'number':
+                fieldRules.push('numeric');
+                break;
+            case 'select':
+                if (field.options) {
+                    fieldRules.push(['in', field.options]);
+                }
+                break;
+        }
+
+        if (field.minLength) fieldRules.push(['min', field.minLength]);
+        if (field.maxLength) fieldRules.push(['max', field.maxLength]);
+
+        rules[field.name] = fieldRules;
+    }
+
+    return rules;
+}
+```
+
+### Syncing Frontend and Backend
+
+Since this library shares the same rule format as the PHP backend library, you can:
+
+1. Store rules once in the database
+2. Serve them to both frontend (TypeScript) and backend (PHP)
+3. Get identical validation behavior everywhere
+
+```typescript
+// API endpoint returns rules used by both frontend and backend
+// GET /api/forms/contact/rules
+{
+    "email": ["required", "email"],
+    "message": ["required", "string", ["min", 10], ["max", 1000]],
+    "category": ["required", ["in", ["support", "sales", "other"]]]
+}
+```
+
+The frontend validates immediately for UX, the backend validates again for security—both using the exact same rules from the same source.
 
 ## Custom Rules
 
