@@ -1,0 +1,49 @@
+{
+    "name": "@signalforge/validation",
+    "version": "1.0.0",
+    "description": "TypeScript validation library for frontend input validation",
+    "type": "module",
+    "main": "./dist/index.cjs",
+    "module": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.js",
+            "require": "./dist/index.cjs"
+        }
+    },
+    "files": [
+        "dist"
+    ],
+    "sideEffects": false,
+    "scripts": {
+        "build": "tsup",
+        "test": "vitest",
+        "test:run": "vitest run",
+        "test:coverage": "vitest --coverage",
+        "lint": "eslint src",
+        "typecheck": "tsc --noEmit"
+    },
+    "devDependencies": {
+        "@typescript-eslint/eslint-plugin": "^6.0.0",
+        "@typescript-eslint/parser": "^6.0.0",
+        "@vitest/coverage-v8": "^1.0.0",
+        "eslint": "^8.56.0",
+        "tsup": "^8.0.0",
+        "typescript": "^5.3.0",
+        "vitest": "^1.0.0"
+    },
+    "keywords": [
+        "validation",
+        "validator",
+        "form",
+        "input",
+        "typescript"
+    ],
+    "license": "MIT",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/signalforge/validation.git"
+    }
+}
